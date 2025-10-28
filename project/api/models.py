@@ -50,3 +50,28 @@ class Recipe(models.Model):
 
     def __str__(self):
         return self.title
+    
+class RecipeIngredient(models.Model):
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='ingredients')
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=6, decimal_places=2)
+    unit = models.ForeignKey(MeasurementUnit, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.recipe.title} - {self.ingredient.name}"
+
+    class Meta:
+        unique_together = ['recipe', 'ingredient']
+
+class UserProduct(models.Model):
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='products')
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=6, decimal_places=2)
+    expiration_date = models.DateField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.ingredient.name}"
+
+    class Meta:
+        unique_together = ['user', 'ingredient']
+            
