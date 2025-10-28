@@ -1,0 +1,56 @@
+# Python
+*.pyc
+*.pyo
+__pycache__/
+*.pyd
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+.venv/
+ENV/
+
+# Django
+*.log
+*.pot
+*.pyc
+*.mo
+*.db
+*.sqlite3
+db.sqlite3
+**/migrations/__pycache__/
+
+
+# Media / uploaded files
+media/
+uploads/
+
+# Static files (collectstatic)
+staticfiles/
+
+# PyCharm / VSCode
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# pytest
+.pytest_cache/
