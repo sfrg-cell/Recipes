@@ -1,4 +1,7 @@
-from api.models import MeasurementUnit, Category, Cuisine, Complexity, Ingredient, Recipe, RecipeIngredient, UserProduct
+from api.models import (
+    MeasurementUnit, Category, Cuisine, Complexity,
+    Ingredient, Recipe, RecipeIngredient, UserProduct
+    )
 from rest_framework import serializers
 
 
@@ -39,6 +42,8 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
 
 
 class RecipeSerializer(serializers.ModelSerializer):
+    ingredients = RecipeIngredientSerializer(many=True, read_only=True)
+
     class Meta:
         model = Recipe
         fields = '__all__'
