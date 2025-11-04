@@ -11,12 +11,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.http import Http404
 from rest_framework import status
+from .filters import RecipeFilter
 
 
 class RecipeList(APIView):
     def get(self, request, format=None):
         recipes = Recipe.objects.all()
-        serializer = RecipeSerializer(recipes, many=True)
+        recipe_filter = RecipeFilter(request.GET, queryset=recipes)
+        filtered_recipes = recipe_filter.qs
+        serializer = RecipeSerializer(filtered_recipes, many=True)
         return Response(serializer.data)
 
     def post(self, request, format=None):
