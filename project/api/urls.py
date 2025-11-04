@@ -15,4 +15,5 @@ urlpatterns = [
 
     path('user-products/', views.UserProductList.as_view()),
     path('user-products/<int:pk>/', views.UserProductDetail.as_view()),
+    path('recipes/random/', views.RandomRecipe.as_view(), name='random-recipe'),
 ]
