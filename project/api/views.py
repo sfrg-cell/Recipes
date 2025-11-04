@@ -12,6 +12,8 @@ from rest_framework.response import Response
 from django.http import Http404
 from rest_framework import status
 from .filters import RecipeFilter
+import random
+from django.db.models import Max
 
 
 class RecipeList(APIView):
@@ -55,6 +57,28 @@ class RecipeDetail(APIView):
         recipe.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
+class RandomRecipe(APIView):
+    def get(self, request, format=None):
+        max_id = Recipe.objects.aggregate(max_id=Max("id"))['max_id']
+        
+        if max_id is None:
+            return Response({'error': 'No recipes found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        for _ in range(10):
+            random_id = random.randint(1, max_id)
+            random_recipe = Recipe.objects.filter(id=random_id).first()
+            if random_recipe:
+                serializer = RecipeSerializer(random_recipe)
+                return Response(serializer.data)
+        
+        fallback_recipe = Recipe.objects.first()
+        if fallback_recipe:
+            serializer = RecipeSerializer(fallback_recipe)
+            return Response(serializer.data)
+        
+        return Response({'error': 'No recipes found'}, status=status.HTTP_404_NOT_FOUND)
+   
 
 class MeasurementUnitList(APIView):
     def get(self, request, format=None):
