@@ -14,9 +14,12 @@ from rest_framework import status
 from .filters import RecipeFilter
 import random
 from django.db.models import Max
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 
 
 class RecipeList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, format=None):
         recipes = Recipe.objects.all()
         recipe_filter = RecipeFilter(request.GET, queryset=recipes)
@@ -33,6 +36,8 @@ class RecipeList(APIView):
 
 
 class RecipeDetail(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get_object(self, pk):
         try:
             return Recipe.objects.get(pk=pk)
@@ -59,6 +64,8 @@ class RecipeDetail(APIView):
 
 
 class RandomRecipe(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, format=None):
         max_id = Recipe.objects.aggregate(max_id=Max("id"))['max_id']
         
@@ -81,6 +88,8 @@ class RandomRecipe(APIView):
    
 
 class MeasurementUnitList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, format=None):
         units = MeasurementUnit.objects.all()
         serializer = MeasurementUnitSerializer(units, many=True)
@@ -88,6 +97,8 @@ class MeasurementUnitList(APIView):
 
 
 class CategoryList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, format=None):
         categories = Category.objects.all()
         serializer = CategorySerializer(categories, many=True)
@@ -95,6 +106,8 @@ class CategoryList(APIView):
 
 
 class CuisineList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, format=None):
         cuisines = Cuisine.objects.all()
         serializer = CuisineSerializer(cuisines, many=True)
@@ -102,6 +115,8 @@ class CuisineList(APIView):
 
 
 class ComplexityList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, format=None):
         complexities = Complexity.objects.all()
         serializer = ComplexitySerializer(complexities, many=True)
@@ -109,6 +124,8 @@ class ComplexityList(APIView):
 
 
 class IngredientList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, format=None):
         ingredients = Ingredient.objects.all()
         serializer = IngredientSerializer(ingredients, many=True)
@@ -123,6 +140,8 @@ class IngredientList(APIView):
 
 
 class IngredientDetail(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get_object(self, pk):
         try:
             return Ingredient.objects.get(pk=pk)
@@ -149,6 +168,8 @@ class IngredientDetail(APIView):
 
 
 class UserProductList(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, format=None):
         products = UserProduct.objects.all()
         serializer = UserProductSerializer(products, many=True)
@@ -163,6 +184,8 @@ class UserProductList(APIView):
 
 
 class UserProductDetail(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get_object(self, pk):
         try:
             return UserProduct.objects.get(pk=pk)
