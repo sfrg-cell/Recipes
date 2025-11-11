@@ -9,6 +9,8 @@ from api.serializers import (
 )
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
+
 from django.http import Http404
 from rest_framework import status
 from .filters import RecipeFilter, fuzzy_search
@@ -29,6 +31,11 @@ class RecipeList(APIView):
             fuzzy_search_term = request.GET.get('fuzzy_search')
             if fuzzy_search_term:
                 filtered_recipes = fuzzy_search(filtered_recipes, fuzzy_search_term)
+            
+            paginator = PageNumberPagination()
+            paginated_recipes = paginator.paginate_queryset(filtered_recipes, request)
+            serializer = RecipeSerializer(paginated_recipes, many=True)
+            
             logger.debug(f'Found {len(filtered_recipes)} recipes after filtering')
             serializer = RecipeSerializer(filtered_recipes, many=True)
             return Response(serializer.data)
