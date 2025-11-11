@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.http import Http404
 from rest_framework import status
-from .filters import RecipeFilter
+from .filters import RecipeFilter, fuzzy_search
 import random
 from django.db.models import Max
 import logging
@@ -23,13 +23,16 @@ class RecipeList(APIView):
     def get(self, request, format=None):
         logger.info('GET request to RecipeList')
         try:
-            recipes = Recipe.objects.all()
+            recipes = Recipe.objects.all().prefetch_related('ingredients__ingredient')
             recipe_filter = RecipeFilter(request.GET, queryset=recipes)
             filtered_recipes = recipe_filter.qs
-            logger.debug(f'Found {filtered_recipes.count()} recipes after filtering')
+            fuzzy_search_term = request.GET.get('fuzzy_search')
+            if fuzzy_search_term:
+                filtered_recipes = fuzzy_search(filtered_recipes, fuzzy_search_term)
+            logger.debug(f'Found {len(filtered_recipes)} recipes after filtering')
             serializer = RecipeSerializer(filtered_recipes, many=True)
             return Response(serializer.data)
-        
+
         except Exception as e:
             logger.error(f'Error in RecipeList GET: {str(e)}', exc_info=True)
             return Response(
