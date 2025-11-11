@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django_filters',
     'api',
     'auth_app',
+    'drf_yasg',
 ]
 
 MIDDLEWARE = [
@@ -156,5 +157,16 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+    },
+}
+
+SWAGGER_SETTINGS = {
+    'USE_SESSION_AUTH': False,
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        }
     },
 }
