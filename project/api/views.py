@@ -14,22 +14,47 @@ from rest_framework import status
 from .filters import RecipeFilter
 import random
 from django.db.models import Max
+import logging
+
+logger = logging.getLogger('api')
 
 
 class RecipeList(APIView):
     def get(self, request, format=None):
-        recipes = Recipe.objects.all()
-        recipe_filter = RecipeFilter(request.GET, queryset=recipes)
-        filtered_recipes = recipe_filter.qs
-        serializer = RecipeSerializer(filtered_recipes, many=True)
-        return Response(serializer.data)
+        logger.info('GET request to RecipeList')
+        try:
+            recipes = Recipe.objects.all()
+            recipe_filter = RecipeFilter(request.GET, queryset=recipes)
+            filtered_recipes = recipe_filter.qs
+            logger.debug(f'Found {filtered_recipes.count()} recipes after filtering')
+            serializer = RecipeSerializer(filtered_recipes, many=True)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in RecipeList GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def post(self, request, format=None):
-        serializer = RecipeSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.info('POST request to RecipeList', extra={'user': request.user.username})
+        try:
+            serializer = RecipeSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                logger.info('Recipe created successfully')
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+            logger.warning(f'Recipe validation failed: {serializer.errors}')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            logger.error(f'Error in RecipeList POST: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class RecipeDetail(APIView):
@@ -37,89 +62,199 @@ class RecipeDetail(APIView):
         try:
             return Recipe.objects.get(pk=pk)
         except Recipe.DoesNotExist:
+            logger.warning(f'Recipe with id {pk} not found')
             raise Http404
 
     def get(self, request, pk, format=None):
-        recipe = self.get_object(pk)
-        serializer = RecipeSerializer(recipe)
-        return Response(serializer.data)
+        logger.info(f'GET request for recipe {pk}')
+        try:
+            recipe = self.get_object(pk)
+            serializer = RecipeSerializer(recipe)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in RecipeDetail GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def put(self, request, pk, format=None):
-        recipe = self.get_object(pk)
-        serializer = RecipeSerializer(recipe, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.info(f'PUT request for recipe {pk}', extra={'user': request.user.username})
+        try:
+            recipe = self.get_object(pk)
+            serializer = RecipeSerializer(recipe, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                logger.info(f'Recipe {pk} updated successfully')
+                return Response(serializer.data)
+            
+            logger.warning(f'Recipe {pk} update validation failed: {serializer.errors}')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            logger.error(f'Error in RecipeDetail PUT: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def delete(self, request, pk, format=None):
-        recipe = self.get_object(pk)
-        recipe.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        logger.info(f'DELETE request for recipe {pk}', extra={'user': request.user.username})
+        try:
+            recipe = self.get_object(pk)
+            recipe.delete()
+            logger.info(f'Recipe {pk} deleted successfully')
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        
+        except Exception as e:
+            logger.error(f'Error in RecipeDetail DELETE: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class RandomRecipe(APIView):
     def get(self, request, format=None):
-        max_id = Recipe.objects.aggregate(max_id=Max("id"))['max_id']
-        
-        if max_id is None:
+        logger.info('GET request to RandomRecipe')
+        try:
+            max_id = Recipe.objects.aggregate(max_id=Max("id"))['max_id']
+            logger.debug(f'Max recipe ID: {max_id}')
+            
+            if max_id is None:
+                logger.warning('No recipes found in database')
+                return Response({'error': 'No recipes found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            for attempt in range(10):
+                random_id = random.randint(1, max_id)
+                random_recipe = Recipe.objects.filter(id=random_id).first()
+                if random_recipe:
+                    logger.info(f'Random recipe found on attempt {attempt + 1}: {random_recipe.name}')
+                    serializer = RecipeSerializer(random_recipe)
+                    return Response(serializer.data)
+                
+            logger.warning('Random recipe not found in 10 attempts, using fallback')
+            fallback_recipe = Recipe.objects.first()
+
+            if fallback_recipe:
+                logger.info(f'Using fallback recipe: {fallback_recipe.name}')
+                serializer = RecipeSerializer(fallback_recipe)
+                return Response(serializer.data)
+            
+            logger.error('No recipes available even for fallback')
             return Response({'error': 'No recipes found'}, status=status.HTTP_404_NOT_FOUND)
         
-        for _ in range(10):
-            random_id = random.randint(1, max_id)
-            random_recipe = Recipe.objects.filter(id=random_id).first()
-            if random_recipe:
-                serializer = RecipeSerializer(random_recipe)
-                return Response(serializer.data)
-        
-        fallback_recipe = Recipe.objects.first()
-        if fallback_recipe:
-            serializer = RecipeSerializer(fallback_recipe)
-            return Response(serializer.data)
-        
-        return Response({'error': 'No recipes found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f'Error in RandomRecipe: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
    
 
 class MeasurementUnitList(APIView):
     def get(self, request, format=None):
-        units = MeasurementUnit.objects.all()
-        serializer = MeasurementUnitSerializer(units, many=True)
-        return Response(serializer.data)
+        logger.info('GET request to MeasurementUnitList')
+        try:
+            units = MeasurementUnit.objects.all()
+            logger.debug(f'Found {units.count()} measurement units')
+            serializer = MeasurementUnitSerializer(units, many=True)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in MeasurementUnitList: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class CategoryList(APIView):
     def get(self, request, format=None):
-        categories = Category.objects.all()
-        serializer = CategorySerializer(categories, many=True)
-        return Response(serializer.data)
+        logger.info('GET request to CategoryList')
+        try:
+            categories = Category.objects.all()
+            logger.debug(f'Found {categories.count()} categories')
+            serializer = CategorySerializer(categories, many=True)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in CategoryList: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class CuisineList(APIView):
     def get(self, request, format=None):
-        cuisines = Cuisine.objects.all()
-        serializer = CuisineSerializer(cuisines, many=True)
-        return Response(serializer.data)
+        logger.info('GET request to CuisineList')
+        try:
+            cuisines = Cuisine.objects.all()
+            logger.debug(f'Found {cuisines.count()} cuisines')
+            serializer = CuisineSerializer(cuisines, many=True)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in CuisineList: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class ComplexityList(APIView):
     def get(self, request, format=None):
-        complexities = Complexity.objects.all()
-        serializer = ComplexitySerializer(complexities, many=True)
-        return Response(serializer.data)
+        logger.info('GET request to ComplexityList')
+        try:
+            complexities = Complexity.objects.all()
+            logger.debug(f'Found {complexities.count()} complexity levels')
+            serializer = ComplexitySerializer(complexities, many=True)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in ComplexityList: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class IngredientList(APIView):
     def get(self, request, format=None):
-        ingredients = Ingredient.objects.all()
-        serializer = IngredientSerializer(ingredients, many=True)
-        return Response(serializer.data)
+        logger.info('GET request to IngredientList')
+        try:
+            ingredients = Ingredient.objects.all()
+            logger.debug(f'Found {ingredients.count()} ingredients')
+            serializer = IngredientSerializer(ingredients, many=True)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in IngredientList GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def post(self, request, format=None):
-        serializer = IngredientSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.info('POST request to IngredientList', extra={'user': request.user.username})
+        try:
+            serializer = IngredientSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                logger.info('Ingredient created successfully')
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+            logger.warning(f'Ingredient validation failed: {serializer.errors}')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            logger.error(f'Error in IngredientList POST: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class IngredientDetail(APIView):
@@ -127,39 +262,93 @@ class IngredientDetail(APIView):
         try:
             return Ingredient.objects.get(pk=pk)
         except Ingredient.DoesNotExist:
+            logger.warning(f'Ingredient with id {pk} not found')
             raise Http404
 
     def get(self, request, pk, format=None):
-        ingredient = self.get_object(pk)
-        serializer = IngredientSerializer(ingredient)
-        return Response(serializer.data)
+        logger.info(f'GET request for ingredient {pk}')
+        try:
+            ingredient = self.get_object(pk)
+            serializer = IngredientSerializer(ingredient)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in IngredientDetail GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def put(self, request, pk, format=None):
-        ingredient = self.get_object(pk)
-        serializer = IngredientSerializer(ingredient, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.info(f'PUT request for ingredient {pk}', extra={'user': request.user.username})
+        try:
+            ingredient = self.get_object(pk)
+            serializer = IngredientSerializer(ingredient, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                logger.info(f'Ingredient {pk} updated successfully')
+                return Response(serializer.data)
+            
+            logger.warning(f'Ingredient {pk} update validation failed: {serializer.errors}')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            logger.error(f'Error in IngredientDetail PUT: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def delete(self, request, pk, format=None):
-        ingredient = self.get_object(pk)
-        ingredient.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        logger.info(f'DELETE request for ingredient {pk}', extra={'user': request.user.username})
+        try:
+            ingredient = self.get_object(pk)
+            ingredient.delete()
+            logger.info(f'Ingredient {pk} deleted successfully')
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        
+        except Exception as e:
+            logger.error(f'Error in IngredientDetail DELETE: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class UserProductList(APIView):
     def get(self, request, format=None):
-        products = UserProduct.objects.all()
-        serializer = UserProductSerializer(products, many=True)
-        return Response(serializer.data)
+        logger.info('GET request to UserProductList', extra={'user': request.user.username})
+        try:
+            products = UserProduct.objects.all()
+            logger.debug(f'Found {products.count()} user products')
+            serializer = UserProductSerializer(products, many=True)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in UserProductList GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def post(self, request, format=None):
-        serializer = UserProductSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.info('POST request to UserProductList', extra={'user': request.user.username})
+        try:
+            serializer = UserProductSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                logger.info('User product created successfully')
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+            logger.warning(f'User product validation failed: {serializer.errors}')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            logger.error(f'Error in UserProductList POST: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class UserProductDetail(APIView):
@@ -167,22 +356,54 @@ class UserProductDetail(APIView):
         try:
             return UserProduct.objects.get(pk=pk)
         except UserProduct.DoesNotExist:
+            logger.warning(f'User product with id {pk} not found')
             raise Http404
 
     def get(self, request, pk, format=None):
-        product = self.get_object(pk)
-        serializer = UserProductSerializer(product)
-        return Response(serializer.data)
+        logger.info(f'GET request for user product {pk}', extra={'user': request.user.username})
+        try:
+            product = self.get_object(pk)
+            serializer = UserProductSerializer(product)
+            return Response(serializer.data)
+        
+        except Exception as e:
+            logger.error(f'Error in UserProductDetail GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def put(self, request, pk, format=None):
-        product = self.get_object(pk)
-        serializer = UserProductSerializer(product, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.info(f'PUT request for user product {pk}', extra={'user': request.user.username})
+        try:
+            product = self.get_object(pk)
+            serializer = UserProductSerializer(product, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                logger.info(f'User product {pk} updated successfully')
+                return Response(serializer.data)
+            
+            logger.warning(f'User product {pk} update validation failed: {serializer.errors}')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            logger.error(f'Error in UserProductDetail PUT: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def delete(self, request, pk, format=None):
-        product = self.get_object(pk)
-        product.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        logger.info(f'DELETE request for user product {pk}', extra={'user': request.user.username})
+        try:
+            product = self.get_object(pk)
+            product.delete()
+            logger.info(f'User product {pk} deleted successfully')
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        
+        except Exception as e:
+            logger.error(f'Error in UserProductDetail DELETE: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
