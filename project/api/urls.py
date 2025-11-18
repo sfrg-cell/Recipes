@@ -3,6 +3,7 @@ from api import views
 
 urlpatterns = [
     path('recipes/', views.RecipeList.as_view()),
+    path('recipes/random/', views.RandomRecipe.as_view(), name='random-recipe'),
     path('recipes/<int:pk>/', views.RecipeDetail.as_view()),
 
     path('units/', views.MeasurementUnitList.as_view()),
@@ -15,5 +16,4 @@ urlpatterns = [
 
     path('user-products/', views.UserProductList.as_view()),
     path('user-products/<int:pk>/', views.UserProductDetail.as_view()),
-    path('recipes/random/', views.RandomRecipe.as_view(), name='random-recipe'),
 ]

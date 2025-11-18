@@ -1,5 +1,20 @@
+# Core Django packages
 asgiref==3.10.0
 Django==5.2.7
 djangorestframework==3.16.1
 sqlparse==0.5.3
 tzdata==2025.2
+
+# Authentication
+djangorestframework-simplejwt>=5.3.0
+
+# Filtering and search
+django-filter>=23.0
+fuzzywuzzy>=0.18.0
+python-Levenshtein>=0.21.0
+
+# Image handling
+Pillow>=10.0.0
+
+# API documentation
+drf-yasg>=1.21.7
