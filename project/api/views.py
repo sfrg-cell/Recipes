@@ -10,6 +10,7 @@ from api.serializers import (
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 
 from django.http import Http404
 from rest_framework import status
@@ -22,6 +23,8 @@ logger = logging.getLogger('api')
 
 
 class RecipeList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+   
     def get(self, request, format=None):
         logger.info('GET request to RecipeList')
         try:
@@ -35,10 +38,9 @@ class RecipeList(APIView):
             paginator = PageNumberPagination()
             paginated_recipes = paginator.paginate_queryset(filtered_recipes, request)
             serializer = RecipeSerializer(paginated_recipes, many=True)
-            
-            logger.debug(f'Found {len(filtered_recipes)} recipes after filtering')
-            serializer = RecipeSerializer(filtered_recipes, many=True)
-            return Response(serializer.data)
+
+            logger.debug(f'Found {len(filtered_recipes)} recipes after filtering, returning page with {len(paginated_recipes)} recipes')
+            return paginator.get_paginated_response(serializer.data)
 
         except Exception as e:
             logger.error(f'Error in RecipeList GET: {str(e)}', exc_info=True)
@@ -68,6 +70,8 @@ class RecipeList(APIView):
 
 
 class RecipeDetail(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
     def get_object(self, pk):
         try:
             return Recipe.objects.get(pk=pk)
@@ -126,6 +130,8 @@ class RecipeDetail(APIView):
 
 
 class RandomRecipe(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, format=None):
         logger.info('GET request to RandomRecipe')
         try:
@@ -140,7 +146,7 @@ class RandomRecipe(APIView):
                 random_id = random.randint(1, max_id)
                 random_recipe = Recipe.objects.filter(id=random_id).first()
                 if random_recipe:
-                    logger.info(f'Random recipe found on attempt {attempt + 1}: {random_recipe.name}')
+                    logger.info(f'Random recipe found on attempt {attempt + 1}: {random_recipe.title}')
                     serializer = RecipeSerializer(random_recipe)
                     return Response(serializer.data)
                 
@@ -148,7 +154,7 @@ class RandomRecipe(APIView):
             fallback_recipe = Recipe.objects.first()
 
             if fallback_recipe:
-                logger.info(f'Using fallback recipe: {fallback_recipe.name}')
+                logger.info(f'Using fallback recipe: {fallback_recipe.title}')
                 serializer = RecipeSerializer(fallback_recipe)
                 return Response(serializer.data)
             
@@ -164,6 +170,8 @@ class RandomRecipe(APIView):
    
 
 class MeasurementUnitList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request, format=None):
         logger.info('GET request to MeasurementUnitList')
         try:
@@ -181,6 +189,8 @@ class MeasurementUnitList(APIView):
 
 
 class CategoryList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
     def get(self, request, format=None):
         logger.info('GET request to CategoryList')
         try:
@@ -198,6 +208,8 @@ class CategoryList(APIView):
 
 
 class CuisineList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
     def get(self, request, format=None):
         logger.info('GET request to CuisineList')
         try:
@@ -215,6 +227,8 @@ class CuisineList(APIView):
 
 
 class ComplexityList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
     def get(self, request, format=None):
         logger.info('GET request to ComplexityList')
         try:
@@ -232,6 +246,8 @@ class ComplexityList(APIView):
 
 
 class IngredientList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
     def get(self, request, format=None):
         logger.info('GET request to IngredientList')
         try:
@@ -268,6 +284,8 @@ class IngredientList(APIView):
 
 
 class IngredientDetail(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
     def get_object(self, pk):
         try:
             return Ingredient.objects.get(pk=pk)
@@ -326,6 +344,8 @@ class IngredientDetail(APIView):
 
 
 class UserProductList(APIView):
+    permission_classes = [IsAuthenticated]
+    
     def get(self, request, format=None):
         logger.info('GET request to UserProductList', extra={'user': request.user.username})
         try:
@@ -362,6 +382,8 @@ class UserProductList(APIView):
 
 
 class UserProductDetail(APIView):
+    permission_classes = [IsAuthenticated]
+    
     def get_object(self, pk):
         try:
             return UserProduct.objects.get(pk=pk)
