@@ -53,3 +53,32 @@ class UserProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProduct
         fields = '__all__'
+
+
+class GenerateRecipeSerializer(serializers.Serializer):
+    """Serializer для запиту на генерацію рецепту через AI."""
+    prompt = serializers.CharField(
+        required=True,
+        help_text="Опис бажаного рецепту (напр. 'паста з креветками')"
+    )
+    cuisine = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Тип кухні (напр. 'Italian', 'Chinese')"
+    )
+    complexity = serializers.ChoiceField(
+        choices=['easy', 'medium', 'hard'],
+        required=False,
+        allow_blank=True,
+        help_text="Складність приготування"
+    )
+    cooking_time = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        help_text="Максимальний час приготування (хвилини)"
+    )
+    servings = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        help_text="Кількість порцій"
+    )

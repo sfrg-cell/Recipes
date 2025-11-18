@@ -5,7 +5,7 @@ from api.models import (
 from api.serializers import (
     RecipeSerializer, MeasurementUnitSerializer, CategorySerializer,
     CuisineSerializer, ComplexitySerializer, IngredientSerializer,
-    UserProductSerializer
+    UserProductSerializer, GenerateRecipeSerializer
 )
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -432,10 +432,52 @@ class UserProductDetail(APIView):
             product.delete()
             logger.info(f'User product {pk} deleted successfully')
             return Response(status=status.HTTP_204_NO_CONTENT)
-        
+
         except Exception as e:
             logger.error(f'Error in UserProductDetail DELETE: {str(e)}', exc_info=True)
             return Response(
-                {'error': 'Internal server error'}, 
+                {'error': 'Internal server error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class GenerateRecipeView(APIView):
+    """
+    API endpoint для генерації рецептів через OpenAI.
+    Користувач може переглянути згенерований рецепт і вирішити чи зберігати його.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request, format=None):
+        logger.info('POST request to GenerateRecipeView')
+
+        try:
+            # Валідуємо вхідні дані
+            serializer = GenerateRecipeSerializer(data=request.data)
+            if not serializer.is_valid():
+                logger.warning(f'Generate recipe validation failed: {serializer.errors}')
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            # Імпортуємо Gemini service
+            from api.services.gemini_service import gemini_service
+
+            # Генеруємо рецепт через Gemini
+            generated_data = gemini_service.generate_recipe(
+                prompt=serializer.validated_data['prompt'],
+                cuisine=serializer.validated_data.get('cuisine'),
+                complexity=serializer.validated_data.get('complexity'),
+                cooking_time=serializer.validated_data.get('cooking_time'),
+                servings=serializer.validated_data.get('servings')
+            )
+
+            logger.info(f'Recipe generated successfully: {generated_data.get("title")}')
+
+            # Повертаємо згенерований рецепт (БЕЗ збереження в БД)
+            return Response(generated_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f'Error generating recipe: {str(e)}', exc_info=True)
+            return Response(
+                {'error': f'Failed to generate recipe: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

@@ -3,6 +3,7 @@ from api import views
 
 urlpatterns = [
     path('recipes/', views.RecipeList.as_view()),
+    path('recipes/generate/', views.GenerateRecipeView.as_view(), name='generate-recipe'),
     path('recipes/random/', views.RandomRecipe.as_view(), name='random-recipe'),
     path('recipes/<int:pk>/', views.RecipeDetail.as_view()),
 

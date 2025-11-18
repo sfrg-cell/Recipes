@@ -6,6 +6,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env.backup
+
 # Virtual environment
 venv/
 env/
@@ -54,3 +60,7 @@ coverage.xml
 
 # pytest
 .pytest_cache/
+
+# Test output files
+test_recipe_output.json
+*.test.json
