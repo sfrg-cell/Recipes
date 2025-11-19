@@ -64,3 +64,5 @@ coverage.xml
 # Test output files
 test_recipe_output.json
 *.test.json
+
+.claude

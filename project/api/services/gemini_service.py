@@ -7,19 +7,14 @@ logger = logging.getLogger('api')
 
 
 class GeminiService:
-    """Сервіс для генерації рецептів через Google Gemini API."""
 
     def __init__(self):
-        # Конфігуруємо Gemini API
         genai.configure(api_key=settings.GEMINI_API_KEY)
 
-        # Використовуємо просту назву моделі без префіксу
         model_name = settings.GEMINI_MODEL
-        # Видаляємо префікс models/ якщо він є
         if model_name.startswith('models/'):
             model_name = model_name.replace('models/', '')
 
-        # Використовуємо gemini-1.5-flash (без -latest)
         if 'latest' in model_name:
             model_name = model_name.replace('-latest', '')
 
@@ -29,23 +24,9 @@ class GeminiService:
         self.max_tokens = settings.GEMINI_MAX_TOKENS
 
     def generate_recipe(self, prompt, cuisine=None, complexity=None, cooking_time=None, servings=None):
-        """
-        Генерує рецепт на основі запиту користувача.
-
-        Args:
-            prompt: Запит користувача (напр. "паста з креветками")
-            cuisine: Тип кухні (опціонально)
-            complexity: Складність (easy/medium/hard) (опціонально)
-            cooking_time: Максимальний час готування (опціонально)
-            servings: Кількість порцій (опціонально)
-
-        Returns:
-            dict: Згенерований рецепт у форматі JSON
-        """
         logger.info(f"Generating recipe for: {prompt}")
 
         try:
-            # Створюємо промпт для AI
             system_instruction = """You are a professional chef. Generate recipes in JSON format ONLY.
 Your response must be ONLY a valid JSON object with this exact structure:
 {
@@ -74,7 +55,6 @@ CRITICAL RULES:
 
             user_message = f"Create a recipe for: {prompt}"
 
-            # Додаємо додаткові параметри якщо вони є
             if cuisine:
                 user_message += f"\nCuisine: {cuisine}"
             if complexity:
@@ -84,10 +64,8 @@ CRITICAL RULES:
             if servings:
                 user_message += f"\nServings: {servings}"
 
-            # Повний промпт
             full_prompt = f"{system_instruction}\n\n{user_message}"
 
-            # Викликаємо Gemini API
             response = self.model.generate_content(
                 full_prompt,
                 generation_config=genai.types.GenerationConfig(
@@ -96,10 +74,8 @@ CRITICAL RULES:
                 )
             )
 
-            # Отримуємо текст відповіді
             response_text = response.text.strip()
 
-            # Видаляємо markdown блоки якщо вони є
             if response_text.startswith("```json"):
                 response_text = response_text[7:]
             if response_text.startswith("```"):
@@ -108,24 +84,18 @@ CRITICAL RULES:
                 response_text = response_text[:-3]
             response_text = response_text.strip()
 
-            # Спробуємо знайти JSON блок якщо є додатковий текст
             if '{' in response_text and '}' in response_text:
                 start_idx = response_text.find('{')
                 end_idx = response_text.rfind('}') + 1
                 response_text = response_text[start_idx:end_idx]
 
-            # Парсимо JSON
             try:
                 recipe_data = json.loads(response_text)
             except json.JSONDecodeError as e:
-                # Спробуємо виправити розірвані рядки
                 logger.warning(f"First JSON parse attempt failed: {e}")
-                # Логуємо проблемний фрагмент
                 logger.debug(f"Problematic response (first 500 chars): {response_text[:500]}")
 
-                # Спробуємо ще раз з більш строгою очисткою
                 import re
-                # Видаляємо можливі некоректні символи
                 response_text = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', response_text)
                 recipe_data = json.loads(response_text)
 
@@ -141,5 +111,4 @@ CRITICAL RULES:
             raise Exception(f"Failed to generate recipe: {str(e)}")
 
 
-# Створюємо єдиний екземпляр сервісу
 gemini_service = GeminiService()
