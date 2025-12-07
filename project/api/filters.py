@@ -5,9 +5,10 @@ from fuzzywuzzy import process
 
 class RecipeFilter(django_filters.FilterSet):
     title = django_filters.CharFilter(field_name='title', lookup_expr='icontains')
-    complexity = django_filters.CharFilter(field_name='complexity__name', lookup_expr='icontains')
-    cuisine = django_filters.CharFilter(field_name='cuisine__name', lookup_expr='icontains')
-    category = django_filters.CharFilter(field_name='category__name', lookup_expr='icontains')
+    search = django_filters.CharFilter(field_name='title', lookup_expr='icontains')
+    complexity = django_filters.NumberFilter(field_name='complexity__id')
+    cuisine = django_filters.NumberFilter(field_name='cuisine__id')
+    category = django_filters.NumberFilter(field_name='category__id')
     author = django_filters.CharFilter(field_name='author__username', lookup_expr='icontains')
     cooking_time = django_filters.NumberFilter(field_name='cooking_time', lookup_expr='exact')
     servings = django_filters.NumberFilter(field_name='servings', lookup_expr='exact')
@@ -18,7 +19,7 @@ class RecipeFilter(django_filters.FilterSet):
     class Meta:
         model = Recipe
         fields = [
-            'title', 'complexity', 'cuisine', 'category', 'author',
+            'title', 'search', 'complexity', 'cuisine', 'category', 'author',
             'cooking_time', 'servings', 'rating'
             ]
 
