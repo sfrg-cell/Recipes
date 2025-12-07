@@ -9,7 +9,7 @@ from api.serializers import (
 )
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.pagination import PageNumberPagination
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 
 from django.http import Http404
@@ -28,14 +28,14 @@ class RecipeList(APIView):
     def get(self, request, format=None):
         logger.info('GET request to RecipeList')
         try:
-            recipes = Recipe.objects.all().prefetch_related('ingredients__ingredient')
+            recipes = Recipe.objects.all().prefetch_related('ingredients__ingredient').order_by('-created_at', 'id')
             recipe_filter = RecipeFilter(request.GET, queryset=recipes)
             filtered_recipes = recipe_filter.qs
             fuzzy_search_term = request.GET.get('fuzzy_search')
             if fuzzy_search_term:
                 filtered_recipes = fuzzy_search(filtered_recipes, fuzzy_search_term)
-            
-            paginator = PageNumberPagination()
+
+            paginator = LimitOffsetPagination()
             paginated_recipes = paginator.paginate_queryset(filtered_recipes, request)
             serializer = RecipeSerializer(paginated_recipes, many=True)
 

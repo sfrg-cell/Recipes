@@ -36,6 +36,9 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 
 class RecipeIngredientSerializer(serializers.ModelSerializer):
+    ingredient = IngredientSerializer(read_only=True)
+    unit = MeasurementUnitSerializer(read_only=True)
+
     class Meta:
         model = RecipeIngredient
         fields = '__all__'
@@ -43,6 +46,9 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
 
 class RecipeSerializer(serializers.ModelSerializer):
     ingredients = RecipeIngredientSerializer(many=True, read_only=True)
+    category = CategorySerializer(read_only=True)
+    cuisine = CuisineSerializer(read_only=True)
+    complexity = ComplexitySerializer(read_only=True)
 
     class Meta:
         model = Recipe
