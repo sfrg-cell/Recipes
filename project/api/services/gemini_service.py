@@ -23,11 +23,11 @@ class GeminiService:
         self.temperature = settings.GEMINI_TEMPERATURE
         self.max_tokens = settings.GEMINI_MAX_TOKENS
 
-    def generate_recipe(self, prompt, cuisine=None, complexity=None, cooking_time=None, servings=None):
+    def generate_recipe(self, prompt, cuisine=None, complexity=None, cooking_time=None, servings=None, user_products=None):
         logger.info(f"Generating recipe for: {prompt}")
 
         try:
-            system_instruction = """You are a professional chef. Generate recipes in JSON format ONLY.
+            system_instruction = """You are a professional chef specializing in SIMPLE, EASY-TO-MAKE recipes. Generate recipes in JSON format ONLY.
 Your response must be ONLY a valid JSON object with this exact structure:
 {
     "title": "Recipe Name",
@@ -51,14 +51,28 @@ CRITICAL RULES:
 - cooking_time and servings are integers (numbers without quotes)
 - ingredients is an array of objects with name, quantity, and unit
 - instructions should be a single string with steps separated by \\n
-- Ensure all JSON strings are properly closed with quotes"""
+- Ensure all JSON strings are properly closed with quotes
 
-            user_message = f"Create a recipe for: {prompt}"
+RECIPE SIMPLICITY REQUIREMENTS:
+- ALWAYS prefer "easy" complexity unless explicitly requested otherwise
+- Keep ingredient list SHORT (5-10 ingredients maximum)
+- Use SIMPLE cooking techniques (no advanced culinary skills required)
+- Instructions should be CLEAR and CONCISE (3-7 steps maximum)
+- Avoid exotic ingredients or hard-to-find items
+- Focus on quick, everyday recipes that anyone can make"""
+
+            user_message = f"Create a SIMPLE and EASY recipe for: {prompt}"
+
+            if user_products:
+                user_message += f"\n\nIMPORTANT - Available ingredients (use ONLY these if possible): {', '.join(user_products)}"
+                user_message += "\nTry to use ONLY the ingredients from the list above. You may add common basics (salt, pepper, oil) if absolutely necessary, but avoid adding other ingredients."
 
             if cuisine:
                 user_message += f"\nCuisine: {cuisine}"
             if complexity:
                 user_message += f"\nComplexity: {complexity}"
+            else:
+                user_message += f"\nComplexity: easy"
             if cooking_time:
                 user_message += f"\nMax cooking time: {cooking_time} minutes"
             if servings:

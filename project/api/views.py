@@ -18,6 +18,7 @@ from .filters import RecipeFilter, fuzzy_search
 import random
 from django.db.models import Max
 import logging
+from api.services.gemini_service import gemini_service
 
 logger = logging.getLogger('api')
 
@@ -432,10 +433,57 @@ class UserProductDetail(APIView):
             product.delete()
             logger.info(f'User product {pk} deleted successfully')
             return Response(status=status.HTTP_204_NO_CONTENT)
-        
+
         except Exception as e:
             logger.error(f'Error in UserProductDetail DELETE: {str(e)}', exc_info=True)
             return Response(
-                {'error': 'Internal server error'}, 
+                {'error': 'Internal server error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class GenerateRecipe(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, format=None):
+        logger.info('POST request to GenerateRecipe', extra={'user': request.user.username})
+        try:
+            prompt = request.data.get('prompt')
+            if not prompt:
+                return Response(
+                    {'error': 'prompt is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            cuisine = request.data.get('cuisine')
+            complexity = request.data.get('complexity')
+            cooking_time = request.data.get('cooking_time')
+            servings = request.data.get('servings')
+            use_user_products = request.data.get('use_user_products', False)
+
+            user_products = None
+            if use_user_products:
+                user_products_qs = UserProduct.objects.filter(user=request.user)
+                if user_products_qs.exists():
+                    user_products = [up.ingredient.name for up in user_products_qs]
+                    logger.info(f'Using {len(user_products)} user products for recipe generation')
+
+            logger.info(f'Generating recipe with prompt: {prompt}')
+            recipe_data = gemini_service.generate_recipe(
+                prompt=prompt,
+                cuisine=cuisine,
+                complexity=complexity,
+                cooking_time=cooking_time,
+                servings=servings,
+                user_products=user_products
+            )
+
+            logger.info(f'Recipe generated successfully: {recipe_data.get("title")}')
+            return Response(recipe_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f'Error in GenerateRecipe POST: {str(e)}', exc_info=True)
+            return Response(
+                {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
