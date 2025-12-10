@@ -1,6 +1,6 @@
 from api.models import (
     MeasurementUnit, Category, Cuisine, Complexity,
-    Ingredient, Recipe, RecipeIngredient, UserProduct
+    Ingredient, Recipe, RecipeIngredient, UserProduct, FavoriteRecipe
     )
 from rest_framework import serializers
 
@@ -73,5 +73,5 @@ class FavoriteRecipeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FavoriteRecipe
-        fields = 'all'
+        fields = '__all__'
         read_only_fields = ['user', 'created_at']

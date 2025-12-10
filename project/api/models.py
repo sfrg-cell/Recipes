@@ -89,7 +89,7 @@ class FavoriteRecipe(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='favorited_by')
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def str(self):
+    def __str__(self):
         return f"{self.user.username} - {self.recipe.title}"
 
     class Meta:
