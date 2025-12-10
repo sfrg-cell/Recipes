@@ -6,6 +6,7 @@ urlpatterns = [
     path('recipes/random/', views.RandomRecipe.as_view(), name='random-recipe'),
     path('recipes/generate/', views.GenerateRecipe.as_view(), name='generate-recipe'),
     path('recipes/<int:pk>/', views.RecipeDetail.as_view()),
+    path('recipes/<int:recipe_id>/check-favorite/', views.CheckFavoriteRecipe.as_view(), name='check-favorite'),
 
     path('units/', views.MeasurementUnitList.as_view()),
     path('categories/', views.CategoryList.as_view()),
@@ -17,4 +18,7 @@ urlpatterns = [
 
     path('user-products/', views.UserProductList.as_view()),
     path('user-products/<int:pk>/', views.UserProductDetail.as_view()),
+    
+    path('favorites/', views.FavoriteRecipeList.as_view(), name='favorite-list'),
+    path('favorites/<int:pk>/', views.FavoriteRecipeDetail.as_view(), name='favorite-detail'),
 ]
