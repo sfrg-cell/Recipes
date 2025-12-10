@@ -146,6 +146,14 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 5,
 }
 
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+}
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
