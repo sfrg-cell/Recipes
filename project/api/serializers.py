@@ -56,6 +56,22 @@ class RecipeSerializer(serializers.ModelSerializer):
 
 
 class UserProductSerializer(serializers.ModelSerializer):
+    ingredient = IngredientSerializer(read_only=True)
+    ingredient_id = serializers.PrimaryKeyRelatedField(
+        queryset=Ingredient.objects.all(), source='ingredient', write_only=True
+    )
     class Meta:
         model = UserProduct
         fields = '__all__'
+
+
+class FavoriteRecipeSerializer(serializers.ModelSerializer):
+    recipe = RecipeSerializer(read_only=True)
+    recipe_id = serializers.PrimaryKeyRelatedField(
+        queryset=Recipe.objects.all(), source='recipe', write_only=True
+    )
+
+    class Meta:
+        model = FavoriteRecipe
+        fields = 'all'
+        read_only_fields = ['user', 'created_at']

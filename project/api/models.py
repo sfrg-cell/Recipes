@@ -82,3 +82,16 @@ class UserProduct(models.Model):
 
     class Meta:
         unique_together = ['user', 'ingredient']
+
+
+class FavoriteRecipe(models.Model):
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='favorites')
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='favorited_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def str(self):
+        return f"{self.user.username} - {self.recipe.title}"
+
+    class Meta:
+        unique_together = ['user', 'recipe']
+        ordering = ['-created_at']

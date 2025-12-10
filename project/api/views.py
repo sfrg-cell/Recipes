@@ -1,11 +1,11 @@
 from api.models import (
     Recipe, MeasurementUnit, Category, Cuisine,
-    Complexity, Ingredient, UserProduct
+    Complexity, Ingredient, UserProduct, FavoriteRecipe
 )
 from api.serializers import (
     RecipeSerializer, MeasurementUnitSerializer, CategorySerializer,
     CuisineSerializer, ComplexitySerializer, IngredientSerializer,
-    UserProductSerializer
+    UserProductSerializer, FavoriteRecipeSerializer
 )
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -350,7 +350,7 @@ class UserProductList(APIView):
     def get(self, request, format=None):
         logger.info('GET request to UserProductList', extra={'user': request.user.username})
         try:
-            products = UserProduct.objects.all()
+            products = UserProduct.objects.filter(user=request.user)
             logger.debug(f'Found {products.count()} user products')
             serializer = UserProductSerializer(products, many=True)
             return Response(serializer.data)
@@ -367,7 +367,7 @@ class UserProductList(APIView):
         try:
             serializer = UserProductSerializer(data=request.data)
             if serializer.is_valid():
-                serializer.save()
+                serializer.save(user=request.user)
                 logger.info('User product created successfully')
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             
@@ -485,5 +485,94 @@ class GenerateRecipe(APIView):
             logger.error(f'Error in GenerateRecipe POST: {str(e)}', exc_info=True)
             return Response(
                 {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class FavoriteRecipeList(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        logger.info('GET request to FavoriteRecipeList', extra={'user': request.user.username})
+        try:
+            favorites = FavoriteRecipe.objects.filter(user=request.user).select_related('recipe')
+            logger.debug(f'Found {favorites.count()} favorite recipes')
+            serializer = FavoriteRecipeSerializer(favorites, many=True)
+            return Response(serializer.data)
+
+        except Exception as e:
+            logger.error(f'Error in FavoriteRecipeList GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def post(self, request, format=None):
+        logger.info('POST request to FavoriteRecipeList', extra={'user': request.user.username})
+        try:
+            serializer = FavoriteRecipeSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(user=request.user)
+                logger.info('Recipe added to favorites successfully')
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+            logger.warning(f'Favorite recipe validation failed: {serializer.errors}')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.error(f'Error in FavoriteRecipeList POST: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class FavoriteRecipeDetail(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, user):
+        try:
+            return FavoriteRecipe.objects.get(pk=pk, user=user)
+        except FavoriteRecipe.DoesNotExist:
+            logger.warning(f'Favorite recipe with id {pk} not found for user {user.username}')
+            raise Http404
+
+    def delete(self, request, pk, format=None):
+        logger.info(f'DELETE request for favorite recipe {pk}', extra={'user': request.user.username})
+        try:
+            favorite = self.get_object(pk, request.user)
+            favorite.delete()
+            logger.info(f'Favorite recipe {pk} removed successfully')
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        except Exception as e:
+            logger.error(f'Error in FavoriteRecipeDetail DELETE: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class CheckFavoriteRecipe(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, recipe_id, format=None):
+        logger.info(f'GET request to check if recipe {recipe_id} is favorite', extra={'user': request.user.username})
+        try:
+            is_favorite = FavoriteRecipe.objects.filter(user=request.user, recipe_id=recipe_id).exists()
+            favorite_id = None
+            if is_favorite:
+                favorite = FavoriteRecipe.objects.get(user=request.user, recipe_id=recipe_id)
+                favorite_id = favorite.id
+
+            return Response({
+                'is_favorite': is_favorite,
+                'favorite_id': favorite_id
+            })
+
+        except Exception as e:
+            logger.error(f'Error in CheckFavoriteRecipe: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
