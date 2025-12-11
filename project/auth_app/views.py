@@ -21,16 +21,21 @@ class RegisterView(APIView):
             serializer = RegisterSerializer(data=request.data)
             if serializer.is_valid():
                 user = serializer.save()
+                refresh = RefreshToken.for_user(user)
                 logger.info(f'User registered successfully: {user.username}')
-                return Response({"message": "User registered successfully."}, status=status.HTTP_201_CREATED)
-            
+                return Response({
+                    "message": "User registered successfully.",
+                    "refresh": str(refresh),
+                    "access": str(refresh.access_token),
+                }, status=status.HTTP_201_CREATED)
+
             logger.warning(f'User registration validation failed: {serializer.errors}')
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         except Exception as e:
             logger.error(f'Error in RegisterView: {str(e)}', exc_info=True)
             return Response(
-                {"error": "Internal server error"}, 
+                {"error": "Internal server error"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
