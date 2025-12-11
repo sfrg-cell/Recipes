@@ -3,10 +3,18 @@ from api import views
 
 urlpatterns = [
     path('recipes/', views.RecipeList.as_view()),
+
     path('recipes/random/', views.RandomRecipe.as_view(), name='random-recipe'),
     path('recipes/generate/', views.GenerateRecipe.as_view(), name='generate-recipe'),
+
+    path('recipes/random/', views.RandomRecipe.as_view()),
+
     path('recipes/<int:pk>/', views.RecipeDetail.as_view()),
     path('recipes/<int:recipe_id>/check-favorite/', views.CheckFavoriteRecipe.as_view(), name='check-favorite'),
+
+    path('recipes/search/title/', views.SearchTitle.as_view()),
+    path('recipes/search/author/', views.SearchAuthor.as_view()),
+    path('recipes/search/ingredient/', views.SearchIngredient.as_view()),
 
     path('units/', views.MeasurementUnitList.as_view()),
     path('categories/', views.CategoryList.as_view()),

@@ -2,6 +2,7 @@ from api.models import (
     Recipe, MeasurementUnit, Category, Cuisine,
     Complexity, Ingredient, UserProduct, FavoriteRecipe
 )
+from django.contrib.auth.models import User
 from api.serializers import (
     RecipeSerializer, MeasurementUnitSerializer, CategorySerializer,
     CuisineSerializer, ComplexitySerializer, IngredientSerializer,
@@ -10,17 +11,95 @@ from api.serializers import (
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.pagination import LimitOffsetPagination
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
-
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from django.http import Http404
 from rest_framework import status
-from .filters import RecipeFilter, fuzzy_search
+from .filters import RecipeFilter
 import random
 from django.db.models import Max
 import logging
 from api.services.gemini_service import gemini_service
+from django.contrib.postgres.search import TrigramSimilarity
+
 
 logger = logging.getLogger('api')
+
+
+class SearchTitle(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request):
+        q = request.GET.get('q', '').lower().strip()
+        
+        if not q:
+            return Response({'error': 'Enter search query'}, status=400)
+    
+        recipes = Recipe.objects.annotate(
+            similarity=TrigramSimilarity("title", q),
+        ).filter(
+            similarity__gt=0.1
+        ).order_by("-similarity")
+        
+        return Response({
+            'count': recipes.count(),
+            'results': RecipeSerializer(recipes, many=True).data
+        })
+
+
+class SearchAuthor(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request):
+        q = request.GET.get('q', '').lower().strip()
+        
+        if not q:
+            return Response({'error': 'Enter author name'}, status=400)
+
+        authors = User.objects.filter(username__iexact=q)
+
+        recipes = Recipe.objects.filter(author__in=authors)
+
+        return Response({
+            'count': recipes.count(),
+            'results': RecipeSerializer(recipes, many=True).data
+        })
+
+
+class SearchIngredient(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    SYNONYMS = [
+        {'oatmeal', 'porridge', 'oats'},
+        {'eggplant', 'aubergine'},
+        {'zucchini', 'courgette'},
+        {'cilantro', 'coriander'},
+        {'tomato', 'tomatoes', 'cherry tomato'},
+        {'bell pepper', 'capsicum', 'sweet pepper'},
+        {'scallion', 'green onion', 'spring onion'},
+    ]
+    
+    def get(self, request):
+        q = request.GET.get('q', '').lower().strip()
+        
+        if not q:
+            return Response({'error': 'Enter ingredient name'}, status=400)
+        
+        search_terms = self.find_synonyms(q)
+        
+        recipes = Recipe.objects.filter(
+            ingredients__ingredient__name__in=list(search_terms)
+        ).distinct()
+        
+        return Response({
+            'count': recipes.count(),
+            'results': RecipeSerializer(recipes, many=True).data
+        })
+    
+    def find_synonyms(self, q):
+        for group in self.SYNONYMS:
+            if q in group:
+                return group
+        return {q}
 
 
 class RecipeList(APIView):
@@ -32,9 +111,6 @@ class RecipeList(APIView):
             recipes = Recipe.objects.all().prefetch_related('ingredients__ingredient').order_by('-created_at', 'id')
             recipe_filter = RecipeFilter(request.GET, queryset=recipes)
             filtered_recipes = recipe_filter.qs
-            fuzzy_search_term = request.GET.get('fuzzy_search')
-            if fuzzy_search_term:
-                filtered_recipes = fuzzy_search(filtered_recipes, fuzzy_search_term)
 
             paginator = LimitOffsetPagination()
             paginated_recipes = paginator.paginate_queryset(filtered_recipes, request)
