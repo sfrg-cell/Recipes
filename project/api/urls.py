@@ -8,6 +8,7 @@ urlpatterns = [
     path('recipes/generate/', views.GenerateRecipe.as_view(), name='generate-recipe'),
 
     path('recipes/random/', views.RandomRecipe.as_view()),
+    path('recipes/random-with-wishes/', views.RandomRecipeWithWishes.as_view(), name='random-recipe-with-wishes'),
 
     path('recipes/<int:pk>/', views.RecipeDetail.as_view()),
     path('recipes/<int:recipe_id>/check-favorite/', views.CheckFavoriteRecipe.as_view(), name='check-favorite'),

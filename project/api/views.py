@@ -244,7 +244,106 @@ class RandomRecipe(APIView):
                 {'error': 'Internal server error'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-   
+
+
+class RandomRecipeWithWishes(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request, format=None):
+        logger.info('GET request to RandomRecipeWithWishes', extra={'filters': request.GET})
+        
+        try:
+            recipes = Recipe.objects.all()
+            
+            category_id = request.GET.get('category')
+            if category_id and category_id.isdigit():
+                recipes = recipes.filter(category_id=int(category_id))
+            
+            cuisine_id = request.GET.get('cuisine')
+            if cuisine_id and cuisine_id.isdigit():
+                recipes = recipes.filter(cuisine_id=int(cuisine_id))
+            
+            complexity_id = request.GET.get('complexity')
+            if complexity_id and complexity_id.isdigit():
+                recipes = recipes.filter(complexity_id=int(complexity_id))
+            
+            max_time = request.GET.get('max_time')
+            if max_time and max_time.isdigit():
+                recipes = recipes.filter(cooking_time__lte=int(max_time))
+            
+            min_rating = request.GET.get('min_rating')
+            if min_rating:
+                try:
+                    recipes = recipes.filter(rating__gte=float(min_rating))
+                except ValueError:
+                    pass
+            
+            servings = request.GET.get('servings')
+            if servings and servings.isdigit():
+                recipes = recipes.filter(servings=int(servings))
+            
+            ingredients_param = request.GET.get('ingredients')
+            if ingredients_param:
+                try:
+                    ingredient_ids = [int(id.strip()) for id in ingredients_param.split(',')]
+                    recipes = recipes.filter(ingredients__ingredient__id__in=ingredient_ids).distinct()
+                except ValueError:
+                    pass
+            
+            total_filtered = recipes.count()
+            logger.debug(f'Found {total_filtered} recipes after filtering')
+            
+            if total_filtered == 0:
+                logger.warning('No recipes found with applied filters')
+                return Response({
+                    'error': 'No recipes found for your criteria',
+                    'filters_used': {
+                        'category': category_id,
+                        'cuisine': cuisine_id,
+                        'complexity': complexity_id,
+                        'max_time': max_time,
+                        'min_rating': min_rating,
+                        'servings': servings,
+                        'ingredients': ingredients_param
+                    }
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            max_id = recipes.aggregate(max_id=Max("id"))['max_id']
+            
+            for attempt in range(10):
+                random_id = random.randint(1, max_id)
+                random_recipe = recipes.filter(id=random_id).first()
+                if random_recipe:
+                    logger.info(f'Random recipe with filters found on attempt {attempt + 1}: {random_recipe.title}')
+                    serializer = RecipeSerializer(random_recipe)
+                    
+                    return Response({
+                        'recipe': serializer.data,
+                        'filters_info': {
+                            'total_available': total_filtered,
+                            'applied_filters': {
+                                'category': category_id,
+                                'cuisine': cuisine_id,
+                                'complexity': complexity_id,
+                                'max_time': max_time,
+                                'min_rating': min_rating,
+                                'servings': servings,
+                                'ingredients': ingredients_param
+                            } if any([category_id, cuisine_id, complexity_id, max_time, min_rating, servings, ingredients_param]) else None
+                        }
+                    })
+            
+            fallback_recipe = recipes.first()
+            if fallback_recipe:
+                serializer = RecipeSerializer(fallback_recipe)
+                return Response({'recipe': serializer.data})
+            
+            return Response({'error': 'No recipes found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        except Exception as e:
+            logger.error(f'Error in RandomRecipeWithWishes: {str(e)}')
+            return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class MeasurementUnitList(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
