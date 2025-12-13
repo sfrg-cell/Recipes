@@ -236,7 +236,7 @@ class RecipeList(APIView):
 
 class RecipeDetail(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    
+
     def get_object(self, pk):
         try:
             return Recipe.objects.get(pk=pk)
@@ -250,11 +250,11 @@ class RecipeDetail(APIView):
             recipe = self.get_object(pk)
             serializer = RecipeSerializer(recipe)
             return Response(serializer.data)
-        
+
         except Exception as e:
             logger.error(f'Error in RecipeDetail GET: {str(e)}', exc_info=True)
             return Response(
-                {'error': 'Internal server error'}, 
+                {'error': 'Internal server error'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -262,19 +262,27 @@ class RecipeDetail(APIView):
         logger.info(f'PUT request for recipe {pk}', extra={'user': request.user.username})
         try:
             recipe = self.get_object(pk)
+
+            if recipe.author != request.user:
+                logger.warning(f'User {request.user.username} attempted to edit recipe {pk} owned by {recipe.author.username}')
+                return Response(
+                    {'error': 'You do not have permission to edit this recipe'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
             serializer = RecipeSerializer(recipe, data=request.data)
             if serializer.is_valid():
                 serializer.save()
                 logger.info(f'Recipe {pk} updated successfully')
                 return Response(serializer.data)
-            
+
             logger.warning(f'Recipe {pk} update validation failed: {serializer.errors}')
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         except Exception as e:
             logger.error(f'Error in RecipeDetail PUT: {str(e)}', exc_info=True)
             return Response(
-                {'error': 'Internal server error'}, 
+                {'error': 'Internal server error'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -282,14 +290,22 @@ class RecipeDetail(APIView):
         logger.info(f'DELETE request for recipe {pk}', extra={'user': request.user.username})
         try:
             recipe = self.get_object(pk)
+
+            if recipe.author != request.user:
+                logger.warning(f'User {request.user.username} attempted to delete recipe {pk} owned by {recipe.author.username}')
+                return Response(
+                    {'error': 'You do not have permission to delete this recipe'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
             recipe.delete()
             logger.info(f'Recipe {pk} deleted successfully')
             return Response(status=status.HTTP_204_NO_CONTENT)
-        
+
         except Exception as e:
             logger.error(f'Error in RecipeDetail DELETE: {str(e)}', exc_info=True)
             return Response(
-                {'error': 'Internal server error'}, 
+                {'error': 'Internal server error'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -869,6 +885,25 @@ class RecipeIngredientList(APIView):
 
         except Exception as e:
             logger.error(f'Error in RecipeIngredientList POST: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class UserRecipeList(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, format=None):
+        logger.info('GET request to UserRecipeList', extra={'user': request.user.username})
+        try:
+            recipes = Recipe.objects.filter(author=request.user).prefetch_related('ingredients__ingredient').order_by('-created_at', 'id')
+            logger.debug(f'Found {recipes.count()} recipes for user {request.user.username}')
+            serializer = RecipeSerializer(recipes, many=True)
+            return Response(serializer.data)
+
+        except Exception as e:
+            logger.error(f'Error in UserRecipeList GET: {str(e)}', exc_info=True)
             return Response(
                 {'error': 'Internal server error'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
