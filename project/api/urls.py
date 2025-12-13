@@ -35,5 +35,8 @@ urlpatterns = [
     path('favorites/<int:pk>/', views.FavoriteRecipeDetail.as_view(), name='favorite-detail'),
 
     path('suggestions/', views.RecipeSuggestions.as_view()),
-    path('suggestions_ai/', views.GenerateRecipeFromUserProducts.as_view())
+    path('suggestions_ai/', views.GenerateRecipeFromUserProducts.as_view()),
+    path('recipes/<int:recipe_id>/nutrition/gemini/', 
+     views.RecipeGeminiNutritionView.as_view(), 
+     name='recipe-nutrition-gemini'),
 ]

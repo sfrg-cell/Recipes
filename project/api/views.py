@@ -23,7 +23,7 @@ from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Q, Count
 import datetime
 from api.services.spoonacular_service import spoonacular_service
-
+from api.services.ai_nutrition_service import gemini_nutrition_service
 
 logger = logging.getLogger('api')
 
@@ -938,3 +938,53 @@ class UserRecipeList(APIView):
                 {'error': 'Internal server error'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+        
+class RecipeGeminiNutritionView(APIView):
+    
+    def get(self, request, recipe_id):
+        logger.info(f"GET request for recipe {recipe_id} nutrition")
+        
+        try:
+            result = gemini_nutrition_service.calculate_calories_simple(
+                recipe_id=recipe_id,
+                user_question=None
+            )
+            
+            logger.info(f"Result success: {result.get('success')}")
+            
+            if not result.get('success'):
+                logger.error(f"Error in result: {result.get('error')}")
+                return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response(result)
+            
+        except Exception as e:
+            logger.error(f"Exception in GET: {e}", exc_info=True)
+            return Response({
+                'error': str(e),
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request, recipe_id):
+        logger.info(f"POST request for recipe {recipe_id} nutrition")
+        
+        try:
+            user_prompt = request.data.get('prompt', '')
+            
+            result = gemini_nutrition_service.calculate_calories_simple(
+                recipe_id=recipe_id,
+                user_question=user_prompt
+            )
+            
+            if not result.get('success'):
+                return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response(result)
+            
+        except Exception as e:
+            logger.error(f"Exception in POST: {e}", exc_info=True)
+            return Response({
+                'error': str(e),
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
