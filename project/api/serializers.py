@@ -30,6 +30,8 @@ class ComplexitySerializer(serializers.ModelSerializer):
 
 
 class IngredientSerializer(serializers.ModelSerializer):
+    unit = MeasurementUnitSerializer(read_only=True)
+
     class Meta:
         model = Ingredient
         fields = '__all__'
@@ -38,6 +40,13 @@ class IngredientSerializer(serializers.ModelSerializer):
 class RecipeIngredientSerializer(serializers.ModelSerializer):
     ingredient = IngredientSerializer(read_only=True)
     unit = MeasurementUnitSerializer(read_only=True)
+
+    ingredient_id = serializers.PrimaryKeyRelatedField(
+        queryset=Ingredient.objects.all(), source='ingredient', write_only=True
+    )
+    unit_id = serializers.PrimaryKeyRelatedField(
+        queryset=MeasurementUnit.objects.all(), source='unit', write_only=True, required=False
+    )
 
     class Meta:
         model = RecipeIngredient
@@ -49,6 +58,16 @@ class RecipeSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     cuisine = CuisineSerializer(read_only=True)
     complexity = ComplexitySerializer(read_only=True)
+
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(), source='category', write_only=True, required=False
+    )
+    cuisine_id = serializers.PrimaryKeyRelatedField(
+        queryset=Cuisine.objects.all(), source='cuisine', write_only=True, required=False
+    )
+    complexity_id = serializers.PrimaryKeyRelatedField(
+        queryset=Complexity.objects.all(), source='complexity', write_only=True, required=False
+    )
 
     class Meta:
         model = Recipe
@@ -63,6 +82,7 @@ class UserProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProduct
         fields = '__all__'
+        read_only_fields = ['user']
 
 
 class FavoriteRecipeSerializer(serializers.ModelSerializer):
