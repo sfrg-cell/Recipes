@@ -20,11 +20,99 @@ from django.db.models import Max
 import logging
 from api.services.gemini_service import gemini_service
 from django.contrib.postgres.search import TrigramSimilarity
+from django.db.models import Q, Count
+import datetime
 
 
 logger = logging.getLogger('api')
 
 
+class RecipeSuggestions(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+
+        user_ingredients = UserProduct.objects.filter(
+            user = request.user
+        ).values_list('ingredient', flat=True)
+
+        if not user_ingredients:
+            return Response({'error': 'User has no ingredients'}, status=status.HTTP_400_BAD_REQUEST)
+
+        recipes = Recipe.objects.annotate(
+            matching_count = Count('ingredients', filter=Q(ingredients__ingredient__in=user_ingredients))
+        ).filter(matching_count__gt=0).order_by('-matching_count')[:10]
+
+        result = []
+        for recipe in recipes:
+            total_ingredients = recipe.ingredients.count()
+
+            missing_ingredients = recipe.ingredients.exclude(ingredient__in=user_ingredients).values_list('ingredient', flat=True)
+
+            missing_names = Ingredient.objects.filter(id__in=missing_ingredients).values_list('name', flat=True)
+
+            result.append({
+                'recipe': RecipeSerializer(recipe).data,
+                'matching_count': recipe.matching_count,
+                'missing_ingredients': list(missing_names),
+                'missing_count': len(missing_ingredients)
+            })
+
+        return Response({
+            'suggestions': result
+        })
+
+
+class GenerateRecipeFromUserProducts(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, format=None):
+        logger.info('POST request to GenerateRecipeFromUserProducts')
+        
+        try:
+            user_ingredient_ids = UserProduct.objects.filter(user=request.user).values_list('ingredient_id', flat=True)
+            
+            user_ingredients = Ingredient.objects.filter(id__in=user_ingredient_ids).values_list('name', flat=True)
+
+            if not user_ingredients:
+                logger.warning(f"User {request.user.id} has no ingredients")
+                return Response(
+                    {'error': 'User has no ingredients'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            prompt = "Recipe with: " + ", ".join(user_ingredients[:10])
+            
+            cuisine = request.data.get('cuisine')
+            complexity = request.data.get('complexity', 'easy')
+            cooking_time = request.data.get('max_time')
+            servings = request.data.get('servings', 2)
+
+            recipe_data = gemini_service.generate_recipe(
+                prompt=prompt,
+                cuisine=cuisine,
+                complexity=complexity,
+                cooking_time=cooking_time,
+                servings=servings,
+                user_products=user_ingredients
+            )
+            
+            recipe_data['generated_for'] = list(user_ingredients)
+            recipe_data['generated_at'] = datetime.datetime.now().isoformat()
+            recipe_data['user_id'] = request.user.id
+            
+            return Response({
+                'success': True,
+                'recipe': recipe_data,
+                'user_ingredients': list(user_ingredients),
+                'generated_at': recipe_data['generated_at']
+            })
+
+        except Exception as e:
+            logger.error(f'Error: {str(e)}', exc_info=True)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        
 class SearchTitle(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
@@ -32,7 +120,7 @@ class SearchTitle(APIView):
         q = request.GET.get('q', '').lower().strip()
         
         if not q:
-            return Response({'error': 'Enter search query'}, status=400)
+            return Response({'error': 'Enter search query'}, status=status.HTTP_400_BAD_REQUEST)
     
         recipes = Recipe.objects.annotate(
             similarity=TrigramSimilarity("title", q),
@@ -53,7 +141,7 @@ class SearchAuthor(APIView):
         q = request.GET.get('q', '').lower().strip()
         
         if not q:
-            return Response({'error': 'Enter author name'}, status=400)
+            return Response({'error': 'Enter author name'}, status=status.HTTP_400_BAD_REQUEST)
 
         authors = User.objects.filter(username__iexact=q)
 
@@ -82,7 +170,7 @@ class SearchIngredient(APIView):
         q = request.GET.get('q', '').lower().strip()
         
         if not q:
-            return Response({'error': 'Enter ingredient name'}, status=400)
+            return Response({'error': 'Enter ingredient name'}, status=status.HTTP_400_BAD_REQUEST)
         
         search_terms = self.find_synonyms(q)
         
