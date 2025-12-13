@@ -1,12 +1,12 @@
 from api.models import (
     Recipe, MeasurementUnit, Category, Cuisine,
-    Complexity, Ingredient, UserProduct, FavoriteRecipe
+    Complexity, Ingredient, UserProduct, FavoriteRecipe, RecipeIngredient
 )
 from django.contrib.auth.models import User
 from api.serializers import (
     RecipeSerializer, MeasurementUnitSerializer, CategorySerializer,
     CuisineSerializer, ComplexitySerializer, IngredientSerializer,
-    UserProductSerializer, FavoriteRecipeSerializer
+    UserProductSerializer, FavoriteRecipeSerializer, RecipeIngredientSerializer
 )
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -648,6 +648,40 @@ class CheckFavoriteRecipe(APIView):
 
         except Exception as e:
             logger.error(f'Error in CheckFavoriteRecipe: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class RecipeIngredientList(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def post(self, request, recipe_id, format=None):
+        logger.info(f'POST request to add ingredient to recipe {recipe_id}', extra={'user': request.user.username})
+        try:
+            try:
+                recipe = Recipe.objects.get(pk=recipe_id)
+            except Recipe.DoesNotExist:
+                return Response(
+                    {'error': 'Recipe not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            data = request.data.copy()
+            data['recipe'] = recipe_id
+
+            serializer = RecipeIngredientSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                logger.info(f'Ingredient added to recipe {recipe_id} successfully')
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+            logger.warning(f'Recipe ingredient validation failed: {serializer.errors}')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.error(f'Error in RecipeIngredientList POST: {str(e)}', exc_info=True)
             return Response(
                 {'error': 'Internal server error'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
