@@ -942,16 +942,10 @@ class RecipeGeminiNutritionView(APIView):
         try:
             user_prompt = request.data.get('prompt', '')
             
-            if 'calor' in user_prompt.lower() or 'calor' in user_prompt.lower():
-                result = gemini_nutrition_service.calculate_calories_simple(
-                    recipe_id=recipe_id,
-                    user_question=user_prompt
-                )
-            else:
-                result = gemini_nutrition_service.analyze_recipe_nutrition(
-                    recipe_id=recipe_id,
-                    user_prompt=user_prompt
-                )
+            result = gemini_nutrition_service.calculate_calories_simple(
+                recipe_id=recipe_id,
+                user_question=user_prompt
+            )
             
             if not result.get('success'):
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
