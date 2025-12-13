@@ -18,6 +18,8 @@ urlpatterns = [
     path('recipes/search/author/', views.SearchAuthor.as_view()),
     path('recipes/search/ingredient/', views.SearchIngredient.as_view()),
 
+    path('user-recipes/', views.UserRecipeList.as_view(), name='user-recipes'),
+
     path('units/', views.MeasurementUnitList.as_view()),
     path('categories/', views.CategoryList.as_view()),
     path('cuisines/', views.CuisineList.as_view()),
@@ -28,7 +30,7 @@ urlpatterns = [
 
     path('user-products/', views.UserProductList.as_view()),
     path('user-products/<int:pk>/', views.UserProductDetail.as_view()),
-    
+
     path('favorites/', views.FavoriteRecipeList.as_view(), name='favorite-list'),
     path('favorites/<int:pk>/', views.FavoriteRecipeDetail.as_view(), name='favorite-detail'),
 
