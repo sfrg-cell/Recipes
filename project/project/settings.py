@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'auth_app',
     'drf_yasg',
     'corsheaders', 
+    'storages'
 ]
 
 MIDDLEWARE = [
@@ -96,9 +97,9 @@ WSGI_APPLICATION = 'project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': '',
-        'USER': '',
-        'PASSWORD': '',
+        'NAME':  os.getenv('DB_NAME'),
+        'USER':  os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': 'localhost',
         'PORT': '5432',
     }
@@ -202,8 +203,24 @@ SWAGGER_SETTINGS = {
     },
 }
 
-# Gemini AI Configuration
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key-here')
-GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
-GEMINI_TEMPERATURE = float(os.getenv('GEMINI_TEMPERATURE', '0.7'))
-GEMINI_MAX_TOKENS = int(os.getenv('GEMINI_MAX_TOKENS', '2000'))
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL')
+GEMINI_TEMPERATURE = float(os.getenv('GEMINI_TEMPERATURE'))
+GEMINI_MAX_TOKENS = int(os.getenv('GEMINI_MAX_TOKENS'))
+
+SPOONACULAR_API_KEY = os.getenv('SPOONACULAR_API_KEY')
+SPOONACULAR_BASE_URL = os.getenv('SPOONACULAR_BASE_URL')
+
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL')
+AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN')
+
+AWS_S3_FILE_OVERWRITE = False
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = False
+
+MEDIA_URL = f'{AWS_S3_CUSTOM_DOMAIN}/'

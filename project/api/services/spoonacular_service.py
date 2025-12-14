@@ -39,8 +39,8 @@ class SpoonacularService:
                     
                     info_url = f"{self.base_url}/food/ingredients/{ingredient_id}/information"
                     info_params = {
-                        'amount': 100,
-                        'unit': 'grams',
+                        'amount': quantity,
+                        'unit': unit if unit else 'grams',
                         'apiKey': self.api_key
                     }
                     
@@ -63,20 +63,26 @@ class SpoonacularService:
                         cache.set(cache_key, result, 604800)
                         return result
             
-            default_price = self.get_default_price(ingredient_name)
+            default_price = self.get_default_price(ingredient_name, quantity, unit)
             return default_price
             
         except Exception as e:
             logger.error(f"Spoonacular error for {ingredient_name}: {str(e)}")
-            default_price = self.get_default_price(ingredient_name)
+            default_price = self.get_default_price(ingredient_name, quantity, unit)
             return default_price
     
-    def get_default_price(self, ingredient_name):
-        price = 2.50
+    def get_default_price(self, ingredient_name, quantity=100, unit='grams'):
+        base_price_per_100 = 2.50
+    
+        if unit in ['pieces']:
+            price_per_piece = 0.50
+            total_price = price_per_piece * quantity
+        else:
+            total_price = (base_price_per_100 / 100) * quantity
         
         result = {
             'name': ingredient_name,
-            'price_usd': price,
+            'price_usd': round(total_price, 2),
             'source': 'default'
         }
         
@@ -84,8 +90,5 @@ class SpoonacularService:
         cache.set(cache_key, result, 86400)
         
         return result
-    
-    def get_prices_for_list(self, ingredient_names):
-        return [self.get_ingredient_price(name) for name in ingredient_names]
 
 spoonacular_service = SpoonacularService()

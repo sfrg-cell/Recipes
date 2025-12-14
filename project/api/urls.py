@@ -36,7 +36,6 @@ urlpatterns = [
 
     path('suggestions/', views.RecipeSuggestions.as_view()),
     path('suggestions_ai/', views.GenerateRecipeFromUserProducts.as_view()),
-    path('recipes/<int:recipe_id>/nutrition/gemini/', 
-     views.RecipeGeminiNutritionView.as_view(), 
-     name='recipe-nutrition-gemini'),
+    
+    path('recipes/<int:recipe_id>/nutrition/gemini/', views.RecipeGeminiNutritionView.as_view(), name='recipe-nutrition-gemini'),
 ]
