@@ -12,14 +12,11 @@ class GeminiNutritionService:
 
     def __init__(self):
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        
+
         model_name = settings.GEMINI_MODEL
         if model_name.startswith('models/'):
             model_name = model_name.replace('models/', '')
-        
-        if 'latest' in model_name:
-            model_name = model_name.replace('-latest', '')
-        
+
         logger.info(f"Initializing Gemini Nutrition Service with model: {model_name}")
         self.model = genai.GenerativeModel(model_name)
         self.temperature = settings.GEMINI_TEMPERATURE
@@ -49,33 +46,38 @@ class GeminiNutritionService:
         }
 
     def _clean_json_response(self, response_text):
-        
+
         logger.info(f"Original response length: {len(response_text)}")
         logger.info(f"First 500 chars: {response_text[:500]}")
-        
+
         if "```json" in response_text:
             response_text = response_text.split("```json")[1]
+            if "```" in response_text:
+                response_text = response_text.split("```")[0]
         elif response_text.startswith("```"):
             response_text = response_text[3:]
-        
-        if "```" in response_text:
-            response_text = response_text.split("```")[0]
-        
+            if "```" in response_text:
+                response_text = response_text.split("```")[0]
+
         response_text = response_text.strip()
-        
-        if '{' in response_text and '}' in response_text:
+
+        if '{' in response_text:
             start_idx = response_text.find('{')
-            end_idx = response_text.rfind('}') + 1
-            response_text = response_text[start_idx:end_idx]
+            end_idx = response_text.rfind('}')
+            if end_idx > start_idx:
+                response_text = response_text[start_idx:end_idx + 1]
+            else:
+                logger.warning("Closing brace not found, JSON may be incomplete")
+                response_text = response_text[start_idx:]
         else:
             logger.error("No JSON braces found in response!")
             logger.error(f"Full response: {response_text}")
-        
+
         response_text = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f-\x9f]', '', response_text)
-        
+
         logger.info(f"Cleaned response length: {len(response_text)}")
         logger.info(f"Cleaned response: {response_text}")
-        
+
         return response_text
 
     def calculate_calories_simple(self, recipe_id, user_question=None):
@@ -139,9 +141,9 @@ Ingredients:
             full_prompt = f"{system_instruction}\n\n{user_message}\n\nReturn ONLY the JSON object:"
             
             logger.info("Sending request to Gemini...")
-            
-            max_tokens = max(2048, self.max_tokens)
-            
+
+            max_tokens = max(4096, self.max_tokens)
+
             response = self.model.generate_content(
                 full_prompt,
                 generation_config=genai.types.GenerationConfig(
@@ -173,26 +175,35 @@ Ingredients:
             except json.JSONDecodeError as e:
                 logger.warning(f"First JSON parse failed: {e}")
                 logger.warning(f"Attempting to fix incomplete JSON...")
-                
+
+                response_text = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', response_text)
+
                 if not response_text.endswith('}'):
                     open_braces = response_text.count('{')
                     close_braces = response_text.count('}')
+                    open_brackets = response_text.count('[')
+                    close_brackets = response_text.count(']')
+
+                    if ',' in response_text and response_text.rstrip().endswith(','):
+                        response_text = response_text.rstrip().rstrip(',')
+
+                    missing_brackets = open_brackets - close_brackets
+                    if missing_brackets > 0:
+                        response_text += ']' * missing_brackets
+                        logger.info(f"Added {missing_brackets} closing brackets")
+
                     missing_braces = open_braces - close_braces
-                    
                     if missing_braces > 0:
                         response_text += '}' * missing_braces
                         logger.info(f"Added {missing_braces} closing braces")
-                
-                response_text = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', response_text)
-                response_text = response_text.replace('\n', ' ').replace('\r', '')
-                
+
                 try:
                     calorie_data = json.loads(response_text)
                     logger.info("JSON parsed after fixing")
                 except json.JSONDecodeError as e2:
                     logger.error(f"Second parse failed: {e2}")
                     logger.error(f"Response text: {response_text}")
-                    
+
                     logger.warning("Using fallback minimal data")
                     calorie_data = {
                         'total_calories': 0,
@@ -237,8 +248,16 @@ Ingredients:
             logger.error(f"Validation error: {e}")
             return {'error': str(e), 'success': False}
         except Exception as e:
-            logger.error(f"Unexpected error: {e}", exc_info=True)
-            return {'error': str(e), 'success': False}
+            error_str = str(e)
+            logger.error(f"Unexpected error: {error_str}", exc_info=True)
+
+            if '429' in error_str or 'quota' in error_str.lower():
+                return {
+                    'error': 'API quota exceeded. Please try again later (free tier: 20 requests/day)',
+                    'success': False
+                }
+
+            return {'error': error_str, 'success': False}
 
 
 gemini_nutrition_service = GeminiNutritionService()

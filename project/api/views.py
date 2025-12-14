@@ -193,21 +193,28 @@ class SearchIngredient(APIView):
         {'cilantro', 'coriander'},
         {'tomato', 'tomatoes', 'cherry tomato'},
         {'bell pepper', 'capsicum', 'sweet pepper'},
-        {'scallion', 'green onion', 'spring onion'},
+        {'scallion', 'green onion', 'spring onion', 'onion'},
     ]
     
     def get(self, request):
         q = request.GET.get('q', '').lower().strip()
-        
+
         if not q:
             return Response({'error': 'Enter ingredient name'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         search_terms = self.find_synonyms(q)
-        
+
+        # Case-insensitive search with partial matching
         recipes = Recipe.objects.filter(
-            ingredients__ingredient__name__in=list(search_terms)
+            ingredients__ingredient__name__icontains=q
         ).distinct()
-        
+
+        # If no results found with partial match, try synonyms
+        if not recipes.exists():
+            recipes = Recipe.objects.filter(
+                ingredients__ingredient__name__in=list(search_terms)
+            ).distinct()
+
         return Response({
             'count': recipes.count(),
             'results': RecipeSerializer(recipes, many=True).data
