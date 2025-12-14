@@ -22,6 +22,7 @@ from api.services.gemini_service import gemini_service
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Q, Count
 import datetime
+from api.services.spoonacular_service import spoonacular_service
 from api.services.ai_nutrition_service import gemini_nutrition_service
 
 logger = logging.getLogger('api')
@@ -45,6 +46,30 @@ class RecipeSuggestions(APIView):
 
         result = []
         for recipe in recipes:
+            missing_data = recipe.ingredients.exclude(
+                ingredient_id__in=user_ingredients
+            ).values_list('ingredient__name', 'quantity', 'unit__name')
+            
+            price_items = []
+            total_price = 0
+            missing_names = []
+            
+            for name, quantity, unit_name in missing_data:
+                try:
+                    qty = float(quantity) if quantity else 0
+                except (ValueError, TypeError):
+                    qty = 0
+                
+                price_info = spoonacular_service.get_ingredient_price(
+                    ingredient_name=name,
+                    quantity=qty,
+                    unit=unit_name if unit_name else 'grams'
+                )
+                
+                price_items.append(price_info)
+                total_price += price_info.get('price_usd', 0)
+                missing_names.append(f"{name} ({qty} {unit_name if unit_name else 'g'})")
+            
             total_ingredients = recipe.ingredients.count()
 
             missing_ingredients = recipe.ingredients.exclude(ingredient__in=user_ingredients).values_list('ingredient', flat=True)
@@ -54,8 +79,13 @@ class RecipeSuggestions(APIView):
             result.append({
                 'recipe': RecipeSerializer(recipe).data,
                 'matching_count': recipe.matching_count,
-                'missing_ingredients': list(missing_names),
-                'missing_count': len(missing_ingredients)
+                'missing_ingredients': missing_names,
+                'missing_count': len(missing_ingredients),
+                'price_estimation': {
+                    'total_usd': round(total_price, 2),
+                    'items': price_items,
+                    'currency': 'USD'
+                }
             })
 
         return Response({
@@ -163,21 +193,28 @@ class SearchIngredient(APIView):
         {'cilantro', 'coriander'},
         {'tomato', 'tomatoes', 'cherry tomato'},
         {'bell pepper', 'capsicum', 'sweet pepper'},
-        {'scallion', 'green onion', 'spring onion'},
+        {'scallion', 'green onion', 'spring onion', 'onion'},
     ]
     
     def get(self, request):
         q = request.GET.get('q', '').lower().strip()
-        
+
         if not q:
             return Response({'error': 'Enter ingredient name'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         search_terms = self.find_synonyms(q)
-        
+
+        # Case-insensitive search with partial matching
         recipes = Recipe.objects.filter(
-            ingredients__ingredient__name__in=list(search_terms)
+            ingredients__ingredient__name__icontains=q
         ).distinct()
-        
+
+        # If no results found with partial match, try synonyms
+        if not recipes.exists():
+            recipes = Recipe.objects.filter(
+                ingredients__ingredient__name__in=list(search_terms)
+            ).distinct()
+
         return Response({
             'count': recipes.count(),
             'results': RecipeSerializer(recipes, many=True).data
@@ -942,16 +979,10 @@ class RecipeGeminiNutritionView(APIView):
         try:
             user_prompt = request.data.get('prompt', '')
             
-            if 'calor' in user_prompt.lower() or 'calor' in user_prompt.lower():
-                result = gemini_nutrition_service.calculate_calories_simple(
-                    recipe_id=recipe_id,
-                    user_question=user_prompt
-                )
-            else:
-                result = gemini_nutrition_service.analyze_recipe_nutrition(
-                    recipe_id=recipe_id,
-                    user_prompt=user_prompt
-                )
+            result = gemini_nutrition_service.calculate_calories_simple(
+                recipe_id=recipe_id,
+                user_question=user_prompt
+            )
             
             if not result.get('success'):
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)

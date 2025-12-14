@@ -15,9 +15,6 @@ class GeminiService:
         if model_name.startswith('models/'):
             model_name = model_name.replace('models/', '')
 
-        if 'latest' in model_name:
-            model_name = model_name.replace('-latest', '')
-
         logger.info(f"Initializing Gemini with model: {model_name}")
         self.model = genai.GenerativeModel(model_name)
         self.temperature = settings.GEMINI_TEMPERATURE
