@@ -24,6 +24,8 @@ from django.db.models import Q, Count
 import datetime
 from api.services.spoonacular_service import spoonacular_service
 from api.services.ai_nutrition_service import gemini_nutrition_service
+from rest_framework.parsers import MultiPartParser, FormParser
+
 
 logger = logging.getLogger('api')
 
@@ -32,65 +34,70 @@ class RecipeSuggestions(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
+        logger.info('GET request to RecipeSuggestions')
 
-        user_ingredients = UserProduct.objects.filter(
-            user = request.user
-        ).values_list('ingredient', flat=True)
+        try:
+            user_ingredients = UserProduct.objects.filter(
+                user = request.user
+            ).values_list('ingredient', flat=True)
 
-        if not user_ingredients:
-            return Response({'error': 'User has no ingredients'}, status=status.HTTP_400_BAD_REQUEST)
+            if not user_ingredients:
+                return Response({'error': 'User has no ingredients'}, status=status.HTTP_400_BAD_REQUEST)
 
-        recipes = Recipe.objects.annotate(
-            matching_count = Count('ingredients', filter=Q(ingredients__ingredient__in=user_ingredients))
-        ).filter(matching_count__gt=0).order_by('-matching_count')[:10]
+            recipes = Recipe.objects.annotate(
+                matching_count = Count('ingredients', filter=Q(ingredients__ingredient__in=user_ingredients))
+            ).filter(matching_count__gt=1).order_by('-matching_count')[:10]
 
-        result = []
-        for recipe in recipes:
-            missing_data = recipe.ingredients.exclude(
-                ingredient_id__in=user_ingredients
-            ).values_list('ingredient__name', 'quantity', 'unit__name')
-            
-            price_items = []
-            total_price = 0
-            missing_names = []
-            
-            for name, quantity, unit_name in missing_data:
-                try:
-                    qty = float(quantity) if quantity else 0
-                except (ValueError, TypeError):
-                    qty = 0
+            result = []
+            for recipe in recipes:
+                missing_data = recipe.ingredients.exclude(ingredient_id__in=user_ingredients
+                ).values_list('ingredient__name', 'quantity', 'unit__name')
                 
-                price_info = spoonacular_service.get_ingredient_price(
-                    ingredient_name=name,
-                    quantity=qty,
-                    unit=unit_name if unit_name else 'grams'
-                )
+                price_items = []
+                total_price = 0
+                missing_names = []
                 
-                price_items.append(price_info)
-                total_price += price_info.get('price_usd', 0)
-                missing_names.append(f"{name} ({qty} {unit_name if unit_name else 'g'})")
-            
-            total_ingredients = recipe.ingredients.count()
+                for name, quantity, unit_name in missing_data:
+                    try:
+                        qty = float(quantity) if quantity else 0
+                    except (ValueError, TypeError):
+                        qty = 0
+                    
+                    price_info = spoonacular_service.get_ingredient_price(
+                        ingredient_name=name,
+                        quantity=qty,
+                        unit=unit_name if unit_name else 'grams'
+                    )
+                    
+                    price_items.append(price_info)
+                    total_price += price_info.get('price_usd', 0)
+                    missing_names.append(f"{name} ({qty} {unit_name if unit_name else 'g'})")
 
-            missing_ingredients = recipe.ingredients.exclude(ingredient__in=user_ingredients).values_list('ingredient', flat=True)
+                missing_ingredients = recipe.ingredients.exclude(ingredient__in=user_ingredients
+                    ).values_list('ingredient', flat=True)
 
-            missing_names = Ingredient.objects.filter(id__in=missing_ingredients).values_list('name', flat=True)
+                result.append({
+                    'recipe': RecipeSerializer(recipe).data,
+                    'matching_count': recipe.matching_count,
+                    'missing_ingredients': missing_names,
+                    'missing_count': len(missing_ingredients),
+                    'price_estimation': {
+                        'total_usd': round(total_price, 2),
+                        'items': price_items,
+                        'currency': 'USD'
+                    }
+                })
 
-            result.append({
-                'recipe': RecipeSerializer(recipe).data,
-                'matching_count': recipe.matching_count,
-                'missing_ingredients': missing_names,
-                'missing_count': len(missing_ingredients),
-                'price_estimation': {
-                    'total_usd': round(total_price, 2),
-                    'items': price_items,
-                    'currency': 'USD'
-                }
+            return Response({
+                'suggestions': result
             })
 
-        return Response({
-            'suggestions': result
-        })
+        except Exception as e:
+            logger.error(f'Error in RecipeSuggestions GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class GenerateRecipeFromUserProducts(APIView):
@@ -139,48 +146,67 @@ class GenerateRecipeFromUserProducts(APIView):
             })
 
         except Exception as e:
-            logger.error(f'Error: {str(e)}', exc_info=True)
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f'Error in GenerateRecipeFromUserProducts POST: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         
 class SearchTitle(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get(self, request):
+        logger.info('GET request to SearchTitle')
         q = request.GET.get('q', '').lower().strip()
         
-        if not q:
-            return Response({'error': 'Enter search query'}, status=status.HTTP_400_BAD_REQUEST)
-    
-        recipes = Recipe.objects.annotate(
-            similarity=TrigramSimilarity("title", q),
-        ).filter(
-            similarity__gt=0.1
-        ).order_by("-similarity")
+        try:
+            if not q:
+                return Response({'error': 'Enter search query'}, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response({
-            'count': recipes.count(),
-            'results': RecipeSerializer(recipes, many=True).data
-        })
+            recipes = Recipe.objects.annotate(similarity=TrigramSimilarity("title", q),).filter(
+                similarity__gt=0.1).order_by("-similarity")
+            
+            return Response({
+                'count': recipes.count(),
+                'results': RecipeSerializer(recipes, many=True).data
+            })
+
+        except Exception as e:
+            logger.error(f'Error in SearchTitle GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 
 
 class SearchAuthor(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get(self, request):
-        q = request.GET.get('q', '').lower().strip()
-        
-        if not q:
-            return Response({'error': 'Enter author name'}, status=status.HTTP_400_BAD_REQUEST)
+        logger.info('GET request to SearchAuthor')
+        try:
+            q = request.GET.get('q', '').lower().strip()
+            
+            if not q:
+                return Response({'error': 'Enter author name'}, status=status.HTTP_400_BAD_REQUEST)
 
-        authors = User.objects.filter(username__iexact=q)
+            authors = User.objects.filter(username__iexact=q)
 
-        recipes = Recipe.objects.filter(author__in=authors)
+            recipes = Recipe.objects.filter(author__in=authors)
 
-        return Response({
-            'count': recipes.count(),
-            'results': RecipeSerializer(recipes, many=True).data
-        })
+            return Response({
+                'count': recipes.count(),
+                'results': RecipeSerializer(recipes, many=True).data
+            })
+
+        except Exception as e:
+            logger.error(f'Error in SearchAuthor GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class SearchIngredient(APIView):
@@ -190,35 +216,50 @@ class SearchIngredient(APIView):
         {'oatmeal', 'porridge', 'oats'},
         {'eggplant', 'aubergine'},
         {'zucchini', 'courgette'},
-        {'cilantro', 'coriander'},
-        {'tomato', 'tomatoes', 'cherry tomato'},
-        {'bell pepper', 'capsicum', 'sweet pepper'},
-        {'scallion', 'green onion', 'spring onion', 'onion'},
+        {'tomato', 'cherry tomato'},
+        {'bell pepper', 'capsicum', 'sweet pepper', 'pepper', 'black pepper', 'white pepper'},
+        {'scallion', 'green onion', 'spring onion', 'onion', 'red onion', 'green onion'},
+        {'cheese', 'feta cheese', 'mozzarella'},
+        {'garlic', 'black garlic'},
+        {'bread', 'loaf', 'baguette', 'rye bread'},
+        {'rice', 'jasmine rice', 'brown rice'},
+        {'chicken', 'chicken breast', 'chicken wings', 'poultry'},
+        {'milk', 'whole milk', 'skim milk', 'almond milk', 'soy milk'},
+        {'beef', 'steak', 'ground beef'},
+        {'pasta', 'spaghetti', 'noodles', 'rice noodles', 'macaroni'},
+        {'sugar', 'brown sugar', 'white sugar'},
+        {'salt', 'sea salt', 'table salt'},
+        {'potato', 'sweet potato', 'yam'},
+        {'carrot', 'baby carrot'},
+        {'vanilla', 'vanilla extract'},
+        {'chocolate', 'dark chocolate', 'milk chocolate'},
+        {'lettuce', 'romaine lettuce', 'iceberg lettuce'},
+        {'beans', 'black beans', 'kidney beans', 'chickpeas'},
     ]
     
     def get(self, request):
-        q = request.GET.get('q', '').lower().strip()
+        logger.info('GET request to SearchIngredient')
+        try:
+            q = request.GET.get('q', '').lower().strip()
+            
+            if not q:
+                return Response({'error': 'Enter ingredient name'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            search_terms = self.find_synonyms(q)
+            
+            recipes = Recipe.objects.filter(ingredients__ingredient__name__in=list(search_terms)).distinct()
+            
+            return Response({
+                'count': recipes.count(),
+                'results': RecipeSerializer(recipes, many=True).data
+            })
 
-        if not q:
-            return Response({'error': 'Enter ingredient name'}, status=status.HTTP_400_BAD_REQUEST)
-
-        search_terms = self.find_synonyms(q)
-
-        # Case-insensitive search with partial matching
-        recipes = Recipe.objects.filter(
-            ingredients__ingredient__name__icontains=q
-        ).distinct()
-
-        # If no results found with partial match, try synonyms
-        if not recipes.exists():
-            recipes = Recipe.objects.filter(
-                ingredients__ingredient__name__in=list(search_terms)
-            ).distinct()
-
-        return Response({
-            'count': recipes.count(),
-            'results': RecipeSerializer(recipes, many=True).data
-        })
+        except Exception as e:
+            logger.error(f'Error in SearchIngredient GET: {str(e)}', exc_info=True)
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def find_synonyms(self, q):
         for group in self.SYNONYMS:
@@ -229,6 +270,7 @@ class SearchIngredient(APIView):
 
 class RecipeList(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
+    parser_classes = (MultiPartParser, FormParser)
    
     def get(self, request, format=None):
         logger.info('GET request to RecipeList')
@@ -256,7 +298,7 @@ class RecipeList(APIView):
         try:
             serializer = RecipeSerializer(data=request.data)
             if serializer.is_valid():
-                serializer.save()
+                serializer.save(author=request.user)
                 logger.info('Recipe created successfully')
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             
@@ -273,6 +315,7 @@ class RecipeList(APIView):
 
 class RecipeDetail(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
+    parser_classes = (MultiPartParser, FormParser)
 
     def get_object(self, pk):
         try:
@@ -309,7 +352,7 @@ class RecipeDetail(APIView):
 
             serializer = RecipeSerializer(recipe, data=request.data)
             if serializer.is_valid():
-                serializer.save()
+                serializer.save(author=request.user)
                 logger.info(f'Recipe {pk} updated successfully')
                 return Response(serializer.data)
 
